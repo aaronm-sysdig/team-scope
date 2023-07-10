@@ -155,23 +155,25 @@ if __name__ == "__main__":
 
     # Get Namespace Information
     for row in arrContextsConfig:
-        print(f"\nProcessing Context: '{row}'")
-        v1 = client.CoreV1Api(api_client=config.new_client_from_config(context=row[0]))
-        if objArgs.annotation is not None:
-            get_namespace_annotations(objArgs.annotation)
-        else:
-            get_namespace_labels(objArgs.label)
+        if len(row) == 1:
+            print(f"\nProcessing Context: '{row}'")
+            v1 = client.CoreV1Api(api_client=config.new_client_from_config(context=row[0]))
+            if objArgs.annotation is not None:
+                get_namespace_annotations(objArgs.annotation)
+            else:
+                get_namespace_labels(objArgs.label)
 
     with open(file='todo.csv', mode='w', newline='') as todocsv:
         writer = csv.writer(todocsv, delimiter=',')
         writer.writerow(['Team Name', 'Team ID', 'Namespace'])
         for row in arrTeamConfig:
-            if objArgs.annotation is not None:
-                arrNamespaces = list({k: v for k, v in arrNSAnnotation.items() if v.startswith(row[2])}.keys())
-            else:
-                arrNamespaces = list({k: v for k, v in arrNSLabels.items() if v.startswith(row[2])}.keys())
-            for todo_row in arrNamespaces:
-                writer.writerow([row[0], row[1], todo_row])
+            if len(row) == 3:
+                if objArgs.annotation is not None:
+                    arrNamespaces = list({k: v for k, v in arrNSAnnotation.items() if v.startswith(row[2])}.keys())
+                else:
+                    arrNamespaces = list({k: v for k, v in arrNSLabels.items() if v.startswith(row[2])}.keys())
+                for todo_row in arrNamespaces:
+                    writer.writerow([row[0], row[1], todo_row])
 
     # Option to continue or not
     print(f"\n'todo.csv' hss ben written to the current directory outlining the team -> namespace mapping.\nPlease review before proceeding")
@@ -187,18 +189,19 @@ if __name__ == "__main__":
 
     print(f"\n")
     for row in arrTeamConfig:
-        if objArgs.annotation is not None:
-            arrNamespaces = list({k: v for k, v in arrNSAnnotation.items() if v.startswith(row[2])}.keys())
-            print(f"Processing Team: '{row[0]}, TeamID:'{row[1]}.  Looking for annotation: '{objArgs.annotation}={row[2]}', found in the following namespaces {arrNamespaces}")
-        else:
-            arrNamespaces = list({k: v for k, v in arrNSLabels.items() if v.startswith(row[2])}.keys())
-            print(f"Processing Team: '{row[0]}, TeamID:'{row[1]}.  Looking for label: '{objArgs.label}={row[2]}', found in the following namespaces {arrNamespaces}")
-        if len(arrNamespaces) !=0:
-            team_url = f"{objArgs.api_url}/api/teams/{row[1]}"
-            arrTeam = (sysdig_request(method='GET', url=team_url, headers=auth_header)).json()
-            strFilter = ','.join(f'"{value}"' for value in arrNamespaces)
-            arrPayload = build_payload(arr_team=arrTeam['team'], str_new_filter=strFilter)
-            objResult = sysdig_request(method='PUT', url=team_url, headers=auth_header, _json=arrPayload)
-            print(f"Update Result Code: {objResult.status_code}")
-        else:
-            print(f"No matching annotation/label. Skipping...")
+        if len(row) == 3:
+            if objArgs.annotation is not None:
+                arrNamespaces = list({k: v for k, v in arrNSAnnotation.items() if v.startswith(row[2])}.keys())
+                print(f"Processing Team: '{row[0]}, TeamID:'{row[1]}.  Looking for annotation: '{objArgs.annotation}={row[2]}', found in the following namespaces {arrNamespaces}")
+            else:
+                arrNamespaces = list({k: v for k, v in arrNSLabels.items() if v.startswith(row[2])}.keys())
+                print(f"Processing Team: '{row[0]}, TeamID:'{row[1]}.  Looking for label: '{objArgs.label}={row[2]}', found in the following namespaces {arrNamespaces}")
+            if len(arrNamespaces) !=0:
+                team_url = f"{objArgs.api_url}/api/teams/{row[1]}"
+                arrTeam = (sysdig_request(method='GET', url=team_url, headers=auth_header)).json()
+                strFilter = ','.join(f'"{value}"' for value in arrNamespaces)
+                arrPayload = build_payload(arr_team=arrTeam['team'], str_new_filter=strFilter)
+                objResult = sysdig_request(method='PUT', url=team_url, headers=auth_header, _json=arrPayload)
+                print(f"Update Result Code: {objResult.status_code}")
+            else:
+                print(f"No matching annotation/label. Skipping...")
