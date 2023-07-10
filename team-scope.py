@@ -42,8 +42,8 @@ def get_namespace_annotations(annotation_key):
     for namespace in namespaces:
         annotations = namespace.metadata.annotations
         if annotations and annotation_key in annotations:
-            print(f"  Adding Namespace:{namespace.metadata.name} to list for Annotation:{annotations[annotation_key]}")
             arrNSAnnotation[namespace.metadata.name] = annotations[annotation_key]
+    print(f" Retrieved annotations for namespaces")
 
 
 def get_namespace_labels(label_key):
@@ -53,8 +53,8 @@ def get_namespace_labels(label_key):
     for namespace in namespaces:
         labels = namespace.metadata.labels
         if labels and label_key in labels:
-            print(f"  Adding Namespace:{namespace.metadata.name} to list for Label:{labels[label_key]}")
             arrNSLabels[namespace.metadata.name] = labels[label_key]
+    print(f" Retrieved labels for namespaces")
 
 
 def build_payload(arr_team, str_new_filter):
@@ -100,7 +100,7 @@ def validate_choice(ctx, param, value):
 
 
 if __name__ == "__main__":
-    objParser = argparse.ArgumentParser(description='Annotations/Label to Teams')
+    objParser = argparse.ArgumentParser(description='"label" and "annotation" are mutually exclusive.  I.E specify one or the other')
     group = objParser.add_mutually_exclusive_group(required=True)
     group.add_argument('--label', required=False,
                        type=str,
@@ -119,15 +119,15 @@ if __name__ == "__main__":
                            required=False,
                            type=str,
                            default=os.environ.get('TEAM_CONFIG', None),
-                           help='Team config CSV (Default: TEAM_CONFIG Environment variable')
-    objParser.add_argument('--contexts_config',
+                           help='Team config CSV (Default: TEAM_CONFIG Environment variable)')
+    objParser.add_argument('--context_config',
                            required=False,
                            type=str,
-                           default=os.environ.get('CONTEXTS_CONFIG', None),
-                           help='Contexts config CSV (Default: CONTEXTS_CONFIG Environment variable')
+                           default=os.environ.get('CONTEXT_CONFIG', None),
+                           help='Context config file (Default: CONTEXT_CONFIG Environment variable)')
 
     objArgs = objParser.parse_args()
-    if objArgs.api_url is None or objArgs.team_config is None or objArgs.contexts_config is None:
+    if objArgs.api_url is None or objArgs.team_config is None or objArgs.context_config is None:
         if objArgs.annotation and objArgs.label is None:
             objParser.parse_args(['--help'])
             exit(1)
@@ -149,7 +149,7 @@ if __name__ == "__main__":
         arrTeamConfig.pop(0)
 
     config.load_kube_config()
-    with open(objArgs.contexts_config) as contextscsvfile:
+    with open(objArgs.context_config) as contextscsvfile:
         arrContextsConfig = list(csv.reader(contextscsvfile, delimiter=','))
         arrContextsConfig.pop(0)
 
@@ -163,19 +163,19 @@ if __name__ == "__main__":
             get_namespace_labels(objArgs.label)
 
     with open(file='todo.csv', mode='w', newline='') as todocsv:
+        writer = csv.writer(todocsv, delimiter=',')
+        writer.writerow(['Team Name', 'Team ID', 'Namespace'])
         for row in arrTeamConfig:
             if objArgs.annotation is not None:
                 arrNamespaces = list({k: v for k, v in arrNSAnnotation.items() if v.startswith(row[2])}.keys())
             else:
                 arrNamespaces = list({k: v for k, v in arrNSLabels.items() if v.startswith(row[2])}.keys())
-            writer = csv.writer(todocsv, delimiter=',')
-            writer.writerow(['Team Name', 'Team ID', 'Namespace'])
             for todo_row in arrNamespaces:
                 writer.writerow([row[0], row[1], todo_row])
 
     # Option to continue or not
-    print(f"\n'todo.csv' hss ben written outlining what will be done.  Please review before proceeding")
-    choice = click.prompt('\nPlease select an option: Y or N', default='N', type=click.STRING, prompt_suffix=' ')
+    print(f"\n'todo.csv' hss ben written to the current directory outlining the team -> namespace mapping.\nPlease review before proceeding")
+    choice = click.prompt('\nWould you like to proceed with execution?: Y or N', default='N', type=click.STRING, prompt_suffix=' ')
     choice = validate_choice(None, None, choice)
     if choice == 'n':
         print(f"Action cancelled.  Exiting...")
@@ -193,9 +193,12 @@ if __name__ == "__main__":
         else:
             arrNamespaces = list({k: v for k, v in arrNSLabels.items() if v.startswith(row[2])}.keys())
             print(f"Processing Team: '{row[0]}, TeamID:'{row[1]}.  Looking for label: '{objArgs.label}={row[2]}', found in the following namespaces {arrNamespaces}")
-        team_url = f"{objArgs.api_url}/api/teams/{row[1]}"
-        arrTeam = (sysdig_request(method='GET', url=team_url, headers=auth_header)).json()
-        strFilter = ','.join(f'"{value}"' for value in arrNamespaces)
-        arrPayload = build_payload(arr_team=arrTeam['team'], str_new_filter=strFilter)
-        objResult = sysdig_request(method='PUT', url=team_url, headers=auth_header, _json=arrPayload)
-        print(f"Update Result Code: {objResult.status_code}")
+        if len(arrNamespaces) !=0:
+            team_url = f"{objArgs.api_url}/api/teams/{row[1]}"
+            arrTeam = (sysdig_request(method='GET', url=team_url, headers=auth_header)).json()
+            strFilter = ','.join(f'"{value}"' for value in arrNamespaces)
+            arrPayload = build_payload(arr_team=arrTeam['team'], str_new_filter=strFilter)
+            objResult = sysdig_request(method='PUT', url=team_url, headers=auth_header, _json=arrPayload)
+            print(f"Update Result Code: {objResult.status_code}")
+        else:
+            print(f"No matching annotation/label. Skipping...")
