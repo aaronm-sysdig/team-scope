@@ -1,0 +1,3 @@
+Name of Context as it is specified in the kube config.  I.e 'kubernetes-admin@kubernetes'
+aaron@kubernetes
+kubernetes-admin@kubernetes
