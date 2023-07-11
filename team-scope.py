@@ -125,6 +125,9 @@ if __name__ == "__main__":
                            type=str,
                            default=os.environ.get('CONTEXT_CONFIG', None),
                            help='Context config file (Default: CONTEXT_CONFIG Environment variable)')
+    objParser.add_argument('--silent',
+                           action='store_true',
+                           help='Run without user interaction (i.e do not prompt to proceed)')
 
     objArgs = objParser.parse_args()
     if objArgs.api_url is None or objArgs.team_config is None or objArgs.context_config is None:
@@ -176,16 +179,20 @@ if __name__ == "__main__":
                     writer.writerow([row[0], row[1], todo_row])
 
     # Option to continue or not
-    print(f"\n'todo.csv' hss ben written to the current directory outlining the team -> namespace mapping.\nPlease review before proceeding")
-    choice = click.prompt('\nWould you like to proceed with execution?: Y or N', default='N', type=click.STRING, prompt_suffix=' ')
-    choice = validate_choice(None, None, choice)
-    if choice == 'n':
-        print(f"Action cancelled.  Exiting...")
-        exit(1)
-    confirm = click.confirm('Are you SURE you want to proceed?', default=False)
-    if not confirm:
-        print(f"Action cancelled.  Exiting...")
-        exit(1)
+    print(f"\n")
+    if not objArgs.silent:
+        print(f"'todo.csv' hss ben written to the current directory outlining the team -> namespace mapping.\nPlease review before proceeding")
+        choice = click.prompt('\nWould you like to proceed with execution?: Y or N', default='N', type=click.STRING, prompt_suffix=' ')
+        choice = validate_choice(None, None, choice)
+        if choice == 'n':
+            print(f"Action cancelled.  Exiting...")
+            exit(1)
+        confirm = click.confirm('Are you SURE you want to proceed?', default=False)
+        if not confirm:
+            print(f"Action cancelled.  Exiting...")
+            exit(1)
+    else:
+        print(f"Running with --silent flag, continuing")
 
     print(f"\n")
     for row in arrTeamConfig:
