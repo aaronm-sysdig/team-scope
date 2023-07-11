@@ -7,9 +7,6 @@ import click
 from kubernetes import client, config
 
 
-# from kubernetes.client import configuration
-
-
 def sysdig_request(method, url, headers, params=None, _json=None) -> requests.Response:
     SLEEP_429_SECONDS = 30
     objRequestResult = requests.Response
