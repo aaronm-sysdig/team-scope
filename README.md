@@ -30,7 +30,7 @@ Label Team,40004990,labeltest
 
 ## Command Help
 ```
-usage: team-scope.py [-h] (--label LABEL | --annotation ANNOTATION) [--api_url API_URL] [--team_config TEAM_CONFIG] [--context_config CONTEXT_CONFIG]
+usage: team-scope.py [-h] (--label LABEL | --annotation ANNOTATION) [--api_url API_URL] [--team_config TEAM_CONFIG] [--context_config CONTEXT_CONFIG] [--silent]
 
 "label" and "annotation" are mutually exclusive. I.E specify one or the other
 
@@ -44,6 +44,7 @@ options:
                         Team config CSV (Default: TEAM_CONFIG Environment variable)
   --context_config CONTEXT_CONFIG
                         Context config file (Default: CONTEXT_CONFIG Environment variable)
+  --silent              Run without user interaction (i.e do not prompt to proceed)
 ```
 
 
@@ -93,7 +94,7 @@ team-scope.py --annotation <annotation to find> --team_config <CSV file> --api_u
 team-scope.py --label <label to find> --team_config <CSV file> --api_url <API_URL> --context_config context.txt
 ```
 
-## Example output
+## Example output - Interactive
 
 ```
 Processing Input File 'teams.csv'
@@ -110,11 +111,8 @@ Please review before proceeding
 Would you like to proceed with execution?: Y or N [N]
 Are you SURE you want to proceed? [y/N]:
 ```
-
 _enter Y or N to either execute or cancel_
-
 ```
-
 Processing Team: 'Team1, TeamID:'40003969.  Looking for annotation: 'my-annotation=a1', found in the following namespaces ['n1', 'n1-1']
 Update Result Code: 200
 Processing Team: 'Team2, TeamID:'40003970.  Looking for annotation: 'my-annotation=a2', found in the following namespaces ['n2', 'n2-1']
@@ -129,4 +127,32 @@ Processing Team: 'Label Team, TeamID:'40003990.  Looking for annotation: 'my-ann
 No matching annotation/label. Skipping...
 
 Process finished with exit code 0
+```
+
+## Example output - Silent
+```
+Processing Input File 'teams.csv'
+
+Processing Context: '['aaron@kubernetes']'
+ Retrieved annotations for namespaces
+
+Processing Context: '['kubernetes-admin@kubernetes']'
+ Retrieved annotations for namespaces
+
+
+Running with --silent flag, continuing
+
+
+Processing Team: 'Team1, TeamID:'40003969.  Looking for annotation: 'my-annotation=a1', found in the following namespaces ['n1', 'n1-1']
+Update Result Code: 200
+Processing Team: 'Team2, TeamID:'40003970.  Looking for annotation: 'my-annotation=a2', found in the following namespaces ['n2', 'n2-1']
+Update Result Code: 200
+Processing Team: 'Team3, TeamID:'40003971.  Looking for annotation: 'my-annotation=a3', found in the following namespaces ['n3', 'n3-1']
+Update Result Code: 200
+Processing Team: 'Team4, TeamID:'40003972.  Looking for annotation: 'my-annotation=a4', found in the following namespaces ['n4', 'n4-1']
+Update Result Code: 200
+Processing Team: 'Team5, TeamID:'40003973.  Looking for annotation: 'my-annotation=a5', found in the following namespaces ['n5', 'n5-1', 'n5-2', 'n5-3']
+Update Result Code: 200
+Processing Team: 'Label Team, TeamID:'40003990.  Looking for annotation: 'my-annotation=labeltest', found in the following namespaces []
+No matching annotation/label. Skipping...
 ```
