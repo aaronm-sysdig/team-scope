@@ -124,17 +124,18 @@ def parse_command_line_arguments():
     group = objParser.add_mutually_exclusive_group(required=True)
 
     default_label = os.environ.get('LABEL', '').split(',') if os.environ.get('LABEL') else None
-    group.add_argument('--label', required=False,
-                       type=str,
+    group.add_argument('--label',
+                       required=False,
+                       action='store_true',
                        default=default_label,
-                       help='Label to look for (Default: LABEL Environment Variable)')
+                       help='Label to look for (Default: LABEL Environment Variable). Can Specify multiples')
 
     default_annotation = os.environ.get('ANNOTATION', '').split(',') if os.environ.get('ANNOTATION') else None
-    group.add_argument('--annotation', required=False,
-                       type=str,
-                       action='append',
+    group.add_argument('--annotation',
+                       required=False,
+                       action='store_true',
                        default=default_annotation,
-                       help='Annotation to look for (Default: ANNOTATION Environment Variable)')
+                       help='Annotation to look for (Default: ANNOTATION Environment Variable). Can Specify multiples')
     objParser.add_argument('--api_url',
                            required=False,
                            action='append',
@@ -162,7 +163,7 @@ def parse_command_line_arguments():
 
     _obj_args = objParser.parse_args()
     if _obj_args.api_url is None or _obj_args.team_config is None or _obj_args.context_config is None:
-        if _obj_args.annotation and _obj_args.label is None:
+        if _obj_args.annotation is False and _obj_args.label is False:
             objParser.parse_args(['--help'])
             exit(1)
     return _obj_args
@@ -198,6 +199,7 @@ def process_context_and_cluster_input_files():
               mode='r') as teamcsv:
         _arr_team_config = list(csv.reader(teamcsv, delimiter=','))
         _arr_team_config.pop(0)
+    _arr_annotation_label = list(set(sublist[2] for sublist in _arr_team_config))
 
     config.load_kube_config()
     with open(file=obj_args.context_config,
@@ -205,7 +207,7 @@ def process_context_and_cluster_input_files():
         _arr_contexts_config = list(csv.reader(contextscsvfile, delimiter=','))
         _arr_contexts_config.pop(0)
 
-    return _arr_team_config, _arr_contexts_config
+    return _arr_team_config, _arr_contexts_config, _arr_annotation_label
 
 
 def confirm_to_proceed():
@@ -240,7 +242,7 @@ if __name__ == "__main__":
     obj_args = parse_command_line_arguments()
     configure_logging()
     auth_header = create_auth_header()
-    arr_team_config, arr_contexts_config = process_context_and_cluster_input_files()
+    arr_team_config, arr_contexts_config, arr_annotation_label = process_context_and_cluster_input_files()
 
     # Get Namespace Information
     for row in arr_contexts_config:
@@ -249,27 +251,19 @@ if __name__ == "__main__":
             v1 = client.CoreV1Api(api_client=config.new_client_from_config(context=row[0]))
             arr_namespaces = v1.list_namespace().items  # Get namespaces
             # Process Annotations
-            if obj_args.annotation is not None:
-                if isinstance(obj_args.annotation, str):
-                    arr_ns_annotations[obj_args.annotation] = get_namespace_annotations(namespaces=arr_namespaces,
-                                                                                        annotation_key=obj_args.annotation)
-                else:
-                    for annotation in obj_args.annotation:
-                        arr_ns_annotations[annotation] = get_namespace_annotations(namespaces=arr_namespaces,
-                                                                                   annotation_key=annotation)
+            if obj_args.annotation:
+                for annotation in arr_annotation_label:
+                    arr_ns_annotations[annotation] = get_namespace_annotations(namespaces=arr_namespaces,
+                                                                               annotation_key=annotation)
             else:
                 # Process Labels
-                if isinstance(obj_args.label, str):
-                    arr_ns_labels[obj_args.label] = get_namespace_labels(namespaces=arr_namespaces,
-                                                                         label_key=obj_args.label)
-                else:
-                    for label in obj_args.label:
-                        arr_ns_labels[label] = get_namespace_labels(namespaces=arr_namespaces,
-                                                                    label_key=label)
+                for label in arr_annotation_label:
+                    arr_ns_labels[label] = get_namespace_labels(namespaces=arr_namespaces,
+                                                                label_key=label)
     arr_namespaces = {}
     for row in arr_team_config:
         arr_namespaces[row[1]] = {}
-        if obj_args.annotation is not None:
+        if obj_args.annotation:
             arr_found = dict({k: v for k, v in arr_ns_annotations[row[2]].items() if v.startswith(row[3])})
             arr_namespaces[row[1]].update(arr_found)
             logging.info(f"Processing Team: '{row[0]}, TeamID:'{row[1]}.  "
@@ -280,7 +274,7 @@ if __name__ == "__main__":
             arr_found = dict({k: v for k, v in arr_ns_labels[row[2]].items() if v.startswith(row[3])})
             arr_namespaces[row[1]].update(arr_found)
             logging.info(f"Processing Team: '{row[0]}, "
-                         f"TeamID:'{row[1]}.  Looking for label: '{obj_args.label}={row[3]}', "
+                         f"TeamID:'{row[1]}.  Looking for label: '{row[2]}={row[3]}', "
                          f"found in the following namespaces {arr_namespaces}")
 
     with open(file='todo.csv', mode='w', newline='') as todocsv:
