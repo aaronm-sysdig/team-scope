@@ -74,7 +74,7 @@ def get_namespace_labels(namespaces, label_key):
     return get_namespace_labels_arr_labels
 
 
-def build_payload(arr_team, str_new_filter):
+def build_payload(arr_team, str_new_filter, str_zone_filter):
     payload = {
         "userRoles": arr_team['userRoles'],
         "id": arr_team['id'],
@@ -104,8 +104,8 @@ def build_payload(arr_team, str_new_filter):
         "entryPoint": {
             "module": arr_team['entryPoint']['module']
         },
-        "zoneIds": [],
-        "allZones": arr_team['allZones']
+        "zoneIds": str_zone_filter,
+        "allZones": not bool(str_zone_filter)
     }
     return payload
 
@@ -123,19 +123,16 @@ def parse_command_line_arguments():
         description='"label" and "annotation" are mutually exclusive.  I.E specify one or the other')
     group = objParser.add_mutually_exclusive_group(required=True)
 
-    default_label = os.environ.get('LABEL', '').split(',') if os.environ.get('LABEL') else None
     group.add_argument('--label',
                        required=False,
                        action='store_true',
-                       default=default_label,
-                       help='Label to look for (Default: LABEL Environment Variable). Can Specify multiples')
-
-    default_annotation = os.environ.get('ANNOTATION', '').split(',') if os.environ.get('ANNOTATION') else None
+                       default=False,
+                       help='Flag to denote looking for labels')
     group.add_argument('--annotation',
                        required=False,
                        action='store_true',
-                       default=default_annotation,
-                       help='Annotation to look for (Default: ANNOTATION Environment Variable). Can Specify multiples')
+                       default=False,
+                       help='Flag to denote looking for annotations')
     objParser.add_argument('--api_url',
                            required=False,
                            action='append',
@@ -151,6 +148,11 @@ def parse_command_line_arguments():
                            required=False,
                            type=str,
                            default=os.environ.get('CONTEXT_CONFIG', None),
+                           help='Context config file (Default: CONTEXT_CONFIG Environment variable)')
+    objParser.add_argument('--zone-config',
+                           required=False,
+                           type=str,
+                           default=os.environ.get('ZONE_CONFIG', None),
                            help='Context config file (Default: CONTEXT_CONFIG Environment variable)')
     objParser.add_argument('--silent',
                            action='store_true',
@@ -201,13 +203,22 @@ def process_context_and_cluster_input_files():
         _arr_team_config.pop(0)
     _arr_annotation_label = list(set(sublist[2] for sublist in _arr_team_config))
 
+    if obj_args.zone_config:
+        logging.info(f"Processing zone Input File '{obj_args.zone_config}'")
+        with open(file=obj_args.zone_config,
+                  mode='r') as zonecsv:
+            _arr_zone_config = list(csv.reader(zonecsv, delimiter=','))
+            _arr_zone_config.pop(0)
+    else:
+        _arr_zone_config = None
+
     config.load_kube_config()
     with open(file=obj_args.context_config,
               mode='r') as contextscsvfile:
         _arr_contexts_config = list(csv.reader(contextscsvfile, delimiter=','))
         _arr_contexts_config.pop(0)
 
-    return _arr_team_config, _arr_contexts_config, _arr_annotation_label
+    return _arr_team_config, _arr_contexts_config, _arr_annotation_label, _arr_zone_config
 
 
 def confirm_to_proceed():
@@ -235,6 +246,16 @@ def confirm_to_proceed():
     logging.info('Are you SURE you want to proceed? [y/N] [N]: = Y')
 
 
+def write_todo_csv():
+    with open(file='todo.csv', mode='w', newline='') as todocsv:
+        writer = csv.writer(todocsv, delimiter=',')
+        writer.writerow(['Team Name', 'Team ID', 'Namespace'])
+        for write_csv_row in arr_team_config:
+            if len(row) == 4:
+                for write_csv_todo_row in arr_namespaces[row[1]]:
+                    writer.writerow([write_csv_row[0], write_csv_row[1], write_csv_todo_row])
+
+
 if __name__ == "__main__":
     arr_ns_annotations = {}
     arr_ns_labels = {}
@@ -242,7 +263,7 @@ if __name__ == "__main__":
     obj_args = parse_command_line_arguments()
     configure_logging()
     auth_header = create_auth_header()
-    arr_team_config, arr_contexts_config, arr_annotation_label = process_context_and_cluster_input_files()
+    arr_team_config, arr_contexts_config, arr_annotation_label, arr_zone_config = process_context_and_cluster_input_files()
 
     # Get Namespace Information
     for row in arr_contexts_config:
@@ -261,8 +282,16 @@ if __name__ == "__main__":
                     arr_ns_labels[label] = get_namespace_labels(namespaces=arr_namespaces,
                                                                 label_key=label)
     arr_namespaces = {}
+    arr_zones = {}
     for row in arr_team_config:
         arr_namespaces[row[1]] = {}
+        arr_zones[row[1]] = {}
+
+        if arr_zone_config is not None:  # I.e we have zones to configure
+            arr_found = list({int(sublist[2]) for sublist in arr_zone_config if sublist[1] == row[1]})
+
+            arr_zones[row[1]] = arr_found
+
         if obj_args.annotation:
             arr_found = dict({k: v for k, v in arr_ns_annotations[row[2]].items() if v.startswith(row[3])})
             arr_namespaces[row[1]].update(arr_found)
@@ -277,14 +306,7 @@ if __name__ == "__main__":
                          f"TeamID:'{row[1]}.  Looking for label: '{row[2]}={row[3]}', "
                          f"found in the following namespaces {arr_namespaces}")
 
-    with open(file='todo.csv', mode='w', newline='') as todocsv:
-        writer = csv.writer(todocsv, delimiter=',')
-        writer.writerow(['Team Name', 'Team ID', 'Namespace'])
-        for row in arr_team_config:
-            if len(row) == 4:
-                for todo_row in arr_namespaces[row[1]]:
-                    writer.writerow([row[0], row[1], todo_row])
-
+    write_todo_csv()
     confirm_to_proceed()
 
     # Send API Requests
@@ -292,8 +314,11 @@ if __name__ == "__main__":
         if len(arr_namespaces[row[1]]) != 0:
             team_url = f"{obj_args.api_url}/api/teams/{row[1]}"
             arr_team = (sysdig_request(method='GET', url=team_url, headers=auth_header)).json()
-            strFilter = ','.join(f'"{value}"' for value in arr_namespaces[row[1]])
-            arr_payload = build_payload(arr_team=arr_team['team'], str_new_filter=strFilter)
+            str_filter = ','.join(f'"{value}"' for value in arr_namespaces[row[1]])
+            arr_zone_filter = list(arr_zones[row[1]])
+            arr_payload = build_payload(arr_team=arr_team['team'], 
+                                        str_new_filter=str_filter,
+                                        str_zone_filter=arr_zone_filter)
             obj_result = sysdig_request(method='PUT', url=team_url, headers=auth_header, _json=arr_payload)
             logging.info(f"Updating Team: '{row[0]}, "
                          f"TeamID:'{row[1]}.")
