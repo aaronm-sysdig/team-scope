@@ -15,7 +15,7 @@ Create a CSV file in with the following columns/rows
 | Sysdig Team Name | Y | Team name in the platform.  Used for informational purposes only.  Not referred to in code |
 | Sysdig Team ID | Y | Team ID to modify.  Easily obtained from the UI via Settings -> Teams |
 | Annotation / Lanel Name | Y | Name of the annotation / label | 
-| Annotation / Label | Y | The actual annotation you are looking for  |
+| Annotation / Label | Y | The actual annotation / label you are looking for  |
 
 ### Example CSV entries - teams-annotation.csv
 ```
@@ -36,15 +36,14 @@ Label Team,40003990,my-label,labeltest
 
 ## Command Help
 ```
-usage: team-scope.py [-h] (--label LABEL | --annotation ANNOTATION) [--api_url API_URL] [--team_config TEAM_CONFIG] [--context_config CONTEXT_CONFIG] [--silent] [--debug]
+usage: team-scope.py [-h] (--label | --annotation) [--api_url API_URL] [--team_config TEAM_CONFIG] [--context_config CONTEXT_CONFIG] [--silent] [--debug]
 
 "label" and "annotation" are mutually exclusive. I.E specify one or the other
 
 optional arguments:
   -h, --help            show this help message and exit
-  --label LABEL         Label to look for (Default: LABEL Environment Variable). Can Specify multiples
-  --annotation ANNOTATION
-                        Annotation to look for (Default: ANNOTATION Environment Variable). Can Specify multiples
+  --label               Flag to denote looking for labels
+  --annotation          Flag to denote looking for annotations
   --api_url API_URL     API URL I.E https://app.au1.sysdig.com (Default: API_URL Environment variable
   --team_config TEAM_CONFIG
                         Team config CSV (Default: TEAM_CONFIG Environment variable)
@@ -61,11 +60,6 @@ If you don't want to set command line parameters, set the below environment vari
 ```
 # Your Sysdig Secure API Token
 export SECURE_API_TOKEN=1c708a83-e413-4c45-87fc-9df23a65142 
-
-# Max # of Days from today that the expiration in the CSV is allowed to be in the future
-export ANNOTATION=an_annotation
-or
-export LABEL=a_label
 
 # Your Sysdig Secure region URL
 export API_URL=https://app.au1.sysdig.com 
@@ -85,21 +79,6 @@ Dependencies are
 3) kubernetes
 ```
 pip3 install -r requirements.txt
-```
-
-
-## Usage (assuming using annotation command line parameter).
-*nb: SECURE_API_TOKEN needs to be an environment variable*
-Can specify more than one annotation
-```
-team-scope.py --annotation <annotation to find> --annotation <annotation to find> --team_config <CSV file> --api_url <API_URL> --context_config
-```
-
-## Usage (assuming using label command line parameter).
-*nb: SECURE_API_TOKEN needs to be an environment variable*
-Can specify more than one label
-```
-team-scope.py --label <label to find>  --label <label to find> --team_config <CSV file> --api_url <API_URL> --context_config context.txt
 ```
 
 ## Example output - Interactive
