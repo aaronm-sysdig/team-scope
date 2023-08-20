@@ -5,51 +5,58 @@ Notwithstanding anything that may be contained to the contrary in your agreement
 # Sysdig Team-Scope
 Example python code that allows you to set an annotation or label on a namespace and then assign those namespaces to a team via a CSV file by scanning kubeconfig contexts specified in a configuration file
 
-_NOTE: This script uses unsupported, undocumented API's that may change at any point._
+NOTE: This script uses unsupported, undocumented APIs that may change at any point._
 
 
 ## teams.csv File format
 Create a CSV file in with the following columns/rows
 | Field | Mandatory? | Note |
-|---|---|---|
+| --- | --- | --- |
 | Sysdig Team Name | Y | Team name in the platform.  Used for informational purposes only.  Not referred to in code |
 | Sysdig Team ID | Y | Team ID to modify.  Easily obtained from the UI via Settings -> Teams |
+| Annotation / Lanel Name | Y | Name of the annotation / label | 
 | Annotation / Label | Y | The actual annotation you are looking for  |
 
-### Example CSV enteries
+### Example CSV entries - teams-annotation.csv
 ```
-Sysdig Team Name,Sysdig Team ID,Annotation/Label value to find
-Team1,40004969,a1
-Team2,40004970,a2
-Team3,40004971,a3
-Team4,40004972,a4
-Team5,40004973,a5
-Label Team,40004990,labeltest
+Sysdig Team Name,Sysdig Team ID,Annotation value to find,Value to find
+Team1,40003969,my-annotation,a1
+Team2,40003970,my-annotation,a2
+Team3,40003971,my-annotation,a3
+Team4,40003972,my-annotation,a4
+Team5,40003973,my-annotation,a5
+Team1,40003969,my-annotation-2,annotation2
 ```
 
+### Example CSV entries - teams-label.csv
+```
+Sysdig Team Name,Sysdig Team ID,Label value to find,Value to find
+Label Team,40003990,my-label,labeltest
+```
 
 ## Command Help
 ```
-usage: team-scope.py [-h] (--label LABEL | --annotation ANNOTATION) [--api_url API_URL] [--team_config TEAM_CONFIG] [--context_config CONTEXT_CONFIG] [--silent]
+usage: team-scope.py [-h] (--label LABEL | --annotation ANNOTATION) [--api_url API_URL] [--team_config TEAM_CONFIG] [--context_config CONTEXT_CONFIG] [--silent] [--debug]
 
 "label" and "annotation" are mutually exclusive. I.E specify one or the other
 
-options:
+optional arguments:
   -h, --help            show this help message and exit
-  --label LABEL         Label to look for (Default: LABEL Environment Variable)
+  --label LABEL         Label to look for (Default: LABEL Environment Variable). Can Specify multiples
   --annotation ANNOTATION
-                        Annotation to look for (Default: ANNOTATION Environment Variable)
+                        Annotation to look for (Default: ANNOTATION Environment Variable). Can Specify multiples
   --api_url API_URL     API URL I.E https://app.au1.sysdig.com (Default: API_URL Environment variable
   --team_config TEAM_CONFIG
                         Team config CSV (Default: TEAM_CONFIG Environment variable)
   --context_config CONTEXT_CONFIG
                         Context config file (Default: CONTEXT_CONFIG Environment variable)
   --silent              Run without user interaction (i.e do not prompt to proceed)
+  --debug               Log Debug
 ```
 
 
 ## Environment Variables
-If you dont want to set command line parameters, set the below environment variables instead
+If you don't want to set command line parameters, set the below environment variables instead
 
 ```
 # Your Sysdig Secure API Token
@@ -76,22 +83,23 @@ Dependencies are
 1) argparse
 2) requests
 3) kubernetes
-4) click
 ```
 pip3 install -r requirements.txt
 ```
 
 
-## Usage (assuming using anotation command line parameter).
+## Usage (assuming using annotation command line parameter).
 *nb: SECURE_API_TOKEN needs to be an environment variable*
+Can specify more than one annotation
 ```
-team-scope.py --annotation <annotation to find> --team_config <CSV file> --api_url <API_URL> --context_config
+team-scope.py --annotation <annotation to find> --annotation <annotation to find> --team_config <CSV file> --api_url <API_URL> --context_config
 ```
 
 ## Usage (assuming using label command line parameter).
 *nb: SECURE_API_TOKEN needs to be an environment variable*
+Can specify more than one label
 ```
-team-scope.py --label <label to find> --team_config <CSV file> --api_url <API_URL> --context_config context.txt
+team-scope.py --label <label to find>  --label <label to find> --team_config <CSV file> --api_url <API_URL> --context_config context.txt
 ```
 
 ## Example output - Interactive
