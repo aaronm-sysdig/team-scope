@@ -3,7 +3,7 @@
 Notwithstanding anything that may be contained to the contrary in your agreement(s) with Sysdig, Sysdig provides no support, no updates, and no warranty or guarantee of any kind with respect to these script(s), including as to their functionality or their ability to work in your environment(s).  Sysdig disclaims all liability and responsibility with respect to any use of these scripts.  
 
 # Sysdig Team-Scope
-Example python code that allows you to set an annotation or label on a namespace and then assign those namespaces to a team via a CSV file by scanning kubeconfig contexts specified in a configuration file
+Example python code that allows you to set an annotation or label on a namespace and then assign those namespaces to a team via a CSV file by scanning kubeconfig contexts specified in a configuration file.  Configuration of zones is also possible also.
 
 NOTE: This script uses unsupported, undocumented APIs that may change at any point._
 
@@ -34,9 +34,29 @@ Sysdig Team Name,Sysdig Team ID,Label value to find,Value to find
 Label Team,40003990,my-label,labeltest
 ```
 
+## teams-zone.csv File format
+Create a CSV file in with the following columns/rows to configure zones for your teams (MUST match the team id in your team config!!)
+| Field | Mandatory? | Note |
+| --- | --- | --- |
+| Sysdig Team Name | Y | Team name in the platform.  Used for informational purposes only.  Not referred to in code |
+| Sysdig Team ID | Y | Team ID to modify.  Easily obtained from the UI via Settings -> Teams |
+| Sysdig Zone ID | T | The zone ID to associate with the team.  One per line but you can specify multiple |
+
+### Example teams-zone.csv
+```
+Sysdig Team Name,Sysdig Zone ID
+Team1,40003969,237960
+Team1,40003969,249762
+Team2,40003970,146701
+Team3,40003971,235575
+Team4,40003972,233407
+Team5,40003973,291049
+Team1,40003969,290818
+Label Team,40003990,290818
+```
 ## Command Help
 ```
-usage: team-scope.py [-h] (--label | --annotation) [--api_url API_URL] [--team_config TEAM_CONFIG] [--context_config CONTEXT_CONFIG] [--silent] [--debug]
+usage: team-scope.py [-h] (--label | --annotation) [--api_url API_URL] [--team_config TEAM_CONFIG] [--context_config CONTEXT_CONFIG] [--zone-config ZONE_CONFIG] [--silent] [--debug]
 
 "label" and "annotation" are mutually exclusive. I.E specify one or the other
 
@@ -49,14 +69,16 @@ optional arguments:
                         Team config CSV (Default: TEAM_CONFIG Environment variable)
   --context_config CONTEXT_CONFIG
                         Context config file (Default: CONTEXT_CONFIG Environment variable)
+  --zone-config ZONE_CONFIG
+                        Context config file (Default: CONTEXT_CONFIG Environment variable)
   --silent              Run without user interaction (i.e do not prompt to proceed)
   --debug               Log Debug
+
 ```
 
 
 ## Environment Variables
 If you don't want to set command line parameters, set the below environment variables instead
-
 ```
 # Your Sysdig Secure API Token
 export SECURE_API_TOKEN=1c708a83-e413-4c45-87fc-9df23a65142 
@@ -66,6 +88,9 @@ export API_URL=https://app.au1.sysdig.com
 
 # Path to your defined csv file
 export TEAM_CONFIG=./teams.csv
+
+# Path to your defined zone csv file
+export ZONE_CONFIG=./teams-zone.csv
 
 # Your context file
 export CONTEXT_CONFIG=./contexts.csv
