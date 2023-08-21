@@ -5,6 +5,7 @@ import requests
 import csv
 import logging
 from kubernetes import client, config
+from collections import defaultdict
 
 
 class MaxRetriesExceededError(Exception):
@@ -133,18 +134,18 @@ def parse_command_line_arguments():
                        action='store_true',
                        default=False,
                        help='Flag to denote looking for annotations')
-    objParser.add_argument('--api_url',
+    objParser.add_argument('--api-url',
                            required=False,
                            action='append',
                            type=str,
                            default=os.environ.get('API_URL', None),
                            help='API URL I.E https://app.au1.sysdig.com (Default: API_URL Environment variable')
-    objParser.add_argument('--team_config',
+    objParser.add_argument('--team-config',
                            required=False,
                            type=str,
                            default=os.environ.get('TEAM_CONFIG', None),
                            help='Team config CSV (Default: TEAM_CONFIG Environment variable)')
-    objParser.add_argument('--context_config',
+    objParser.add_argument('--context-config',
                            required=False,
                            type=str,
                            default=os.environ.get('CONTEXT_CONFIG', None),
@@ -214,8 +215,8 @@ def process_context_and_cluster_input_files():
 
     config.load_kube_config()
     with open(file=obj_args.context_config,
-              mode='r') as contextscsvfile:
-        _arr_contexts_config = list(csv.reader(contextscsvfile, delimiter=','))
+              mode='r') as context_file:
+        _arr_contexts_config = [line.strip() for line in context_file]
         _arr_contexts_config.pop(0)
 
     return _arr_team_config, _arr_contexts_config, _arr_annotation_label, _arr_zone_config
@@ -246,14 +247,21 @@ def confirm_to_proceed():
     logging.info('Are you SURE you want to proceed? [y/N] [N]: = Y')
 
 
+def get_team_name(team_id, teams_list):
+    for team in teams_list:
+        if team[1] == team_id:
+            return team[0]
+    return None  # Return None if the team ID wasn't found
+
+
 def write_todo_csv():
     with open(file='todo.csv', mode='w', newline='') as todocsv:
         writer = csv.writer(todocsv, delimiter=',')
         writer.writerow(['Team Name', 'Team ID', 'Namespace'])
-        for write_csv_row in arr_team_config:
-            if len(row) == 4:
-                for write_csv_todo_row in arr_namespaces[row[1]]:
-                    writer.writerow([write_csv_row[0], write_csv_row[1], write_csv_todo_row])
+        for key, value in arr_namespaces.items():
+            str_team_name = get_team_name(key, arr_team_config)
+            for sub_key in value.keys():
+                writer.writerow([str(str_team_name), str(key), str(sub_key)])
 
 
 if __name__ == "__main__":
@@ -267,9 +275,9 @@ if __name__ == "__main__":
 
     # Get Namespace Information
     for row in arr_contexts_config:
-        if len(row) == 1:
+        if len(row) != 0:
             logging.info(f"Processing Context: '{row}'")
-            v1 = client.CoreV1Api(api_client=config.new_client_from_config(context=row[0]))
+            v1 = client.CoreV1Api(api_client=config.new_client_from_config(context=row))
             arr_namespaces = v1.list_namespace().items  # Get namespaces
             # Process Annotations
             if obj_args.annotation:
@@ -281,10 +289,14 @@ if __name__ == "__main__":
                 for label in arr_annotation_label:
                     arr_ns_labels[label] = get_namespace_labels(namespaces=arr_namespaces,
                                                                 label_key=label)
-    arr_namespaces = {}
+        else:
+            logging.error('We could not find a valid Kubernetes context.  Exiting... (sorry)')
+            exit(1)
+
     arr_zones = {}
+    arr_namespaces = defaultdict(dict)
+
     for row in arr_team_config:
-        arr_namespaces[row[1]] = {}
         arr_zones[row[1]] = {}
 
         if arr_zone_config is not None:  # I.e we have zones to configure
@@ -297,31 +309,31 @@ if __name__ == "__main__":
             arr_namespaces[row[1]].update(arr_found)
             logging.info(f"Processing Team: '{row[0]}, TeamID:'{row[1]}.  "
                          f"Looking for annotation: '{row[2]}={row[3]}', "
-                         f"found in the following namespaces '{', '.join(arr_found)}'")
+                         f"found in the following namespaces '{', '.join(arr_found) if len(arr_found) > 0 else 'None Found'}'")
 
         else:
             arr_found = dict({k: v for k, v in arr_ns_labels[row[2]].items() if v.startswith(row[3])})
             arr_namespaces[row[1]].update(arr_found)
             logging.info(f"Processing Team: '{row[0]}, "
                          f"TeamID:'{row[1]}.  Looking for label: '{row[2]}={row[3]}', "
-                         f"found in the following namespaces {arr_namespaces}")
+                         f"found in the following namespaces '{', '.join(arr_found) if len(arr_found) > 0 else 'None Found'}'")
 
     write_todo_csv()
     confirm_to_proceed()
 
     # Send API Requests
-    for row in arr_team_config:
-        if len(arr_namespaces[row[1]]) != 0:
-            team_url = f"{obj_args.api_url}/api/teams/{row[1]}"
+    for row_teamid in arr_namespaces:
+        if len(arr_namespaces[row_teamid]) != 0:
+            team_url = f"{obj_args.api_url}/api/teams/{row_teamid}"
             arr_team = (sysdig_request(method='GET', url=team_url, headers=auth_header)).json()
-            str_filter = ','.join(f'"{value}"' for value in arr_namespaces[row[1]])
-            arr_zone_filter = list(arr_zones[row[1]])
+            str_filter = ','.join(f'"{value}"' for value in arr_namespaces[row_teamid])
+            arr_zone_filter = list(arr_zones[row_teamid])
             arr_payload = build_payload(arr_team=arr_team['team'], 
                                         str_new_filter=str_filter,
                                         str_zone_filter=arr_zone_filter)
             obj_result = sysdig_request(method='PUT', url=team_url, headers=auth_header, _json=arr_payload)
-            logging.info(f"Updating Team: '{row[0]}, "
-                         f"TeamID:'{row[1]}.")
+            logging.info(f"Updating Team: '{get_team_name(row_teamid,arr_team_config)}, "
+                         f"TeamID:'{row_teamid}.")
             logging.debug(f" Payload {arr_payload}")
             logging.info(f"Update Result Code: {obj_result.status_code}")
         else:
