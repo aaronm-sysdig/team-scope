@@ -64,10 +64,10 @@ optional arguments:
   -h, --help            show this help message and exit
   --label               Flag to denote looking for labels
   --annotation          Flag to denote looking for annotations
-  --api_url API_URL     API URL I.E https://app.au1.sysdig.com (Default: API_URL Environment variable
-  --team_config TEAM_CONFIG
+  --api-url API_URL     API URL I.E https://app.au1.sysdig.com (Default: API_URL Environment variable
+  --team-config TEAM_CONFIG
                         Team config CSV (Default: TEAM_CONFIG Environment variable)
-  --context_config CONTEXT_CONFIG
+  --context-config CONTEXT_CONFIG
                         Context config file (Default: CONTEXT_CONFIG Environment variable)
   --zone-config ZONE_CONFIG
                         Context config file (Default: CONTEXT_CONFIG Environment variable)
