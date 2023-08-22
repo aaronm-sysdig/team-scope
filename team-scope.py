@@ -6,7 +6,7 @@ import csv
 import logging
 from kubernetes import client, config
 from collections import defaultdict
-
+__version__ = "1.1.0"
 
 class MaxRetriesExceededError(Exception):
     """Custom exception for when max retries are hit."""
@@ -121,44 +121,47 @@ def validate_choice(value):
 
 def parse_command_line_arguments():
     objParser = argparse.ArgumentParser(
-        description='"label" and "annotation" are mutually exclusive.  I.E specify one or the other')
+        description=f"team-scope.py {__version__} '--label' and '--annotation' are mutually exclusive.  I.E specify one or the other")
     group = objParser.add_mutually_exclusive_group(required=True)
 
-    group.add_argument('--label',
+    objParser.add_argument('--version', '-v',
+                       action='version',
+                       version='%(prog)s ' + __version__)
+    group.add_argument('--label', '-l',
                        required=False,
                        action='store_true',
                        default=False,
                        help='Flag to denote looking for labels')
-    group.add_argument('--annotation',
+    group.add_argument('--annotation', '-a',
                        required=False,
                        action='store_true',
                        default=False,
                        help='Flag to denote looking for annotations')
     objParser.add_argument('--api-url',
-                           required=False,
-                           action='append',
+                           required=True,
+                           action='store',
                            type=str,
                            default=os.environ.get('API_URL', None),
                            help='API URL I.E https://app.au1.sysdig.com (Default: API_URL Environment variable')
-    objParser.add_argument('--team-config',
-                           required=False,
+    objParser.add_argument('--team-config', '-t',
+                           required=True,
                            type=str,
                            default=os.environ.get('TEAM_CONFIG', None),
                            help='Team config CSV (Default: TEAM_CONFIG Environment variable)')
-    objParser.add_argument('--context-config',
-                           required=False,
+    objParser.add_argument('--context-config', '-c',
+                           required=True,
                            type=str,
                            default=os.environ.get('CONTEXT_CONFIG', None),
                            help='Context config file (Default: CONTEXT_CONFIG Environment variable)')
-    objParser.add_argument('--zone-config',
+    objParser.add_argument('--zone-config', '-z',
                            required=False,
                            type=str,
                            default=os.environ.get('ZONE_CONFIG', None),
                            help='Context config file (Default: CONTEXT_CONFIG Environment variable)')
-    objParser.add_argument('--silent',
+    objParser.add_argument('--silent', '-s',
                            action='store_true',
                            help='Run without user interaction (i.e do not prompt to proceed)')
-    objParser.add_argument('--debug',
+    objParser.add_argument('--debug', '-d',
                            action='store_true',
                            required=False,
                            default=False,
