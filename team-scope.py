@@ -6,7 +6,9 @@ import csv
 import logging
 from kubernetes import client, config
 from collections import defaultdict
-__version__ = "1.1.0"
+
+__version__ = "1.2.0"
+
 
 class MaxRetriesExceededError(Exception):
     """Custom exception for when max retries are hit."""
@@ -75,40 +77,57 @@ def get_namespace_labels(namespaces, label_key):
     return get_namespace_labels_arr_labels
 
 
-def build_payload(arr_team, str_new_filter, str_zone_filter):
+def build_payload(_arr_team, _str_new_filter):
     payload = {
-        "userRoles": arr_team['userRoles'],
-        "id": arr_team['id'],
-        "version": arr_team['version'],
-        "name": arr_team['name'],
-        "theme": arr_team['theme'],
-        "defaultTeamRole": arr_team['defaultTeamRole'],
-        "description": arr_team['description'],
+        "userRoles": _arr_team['userRoles'],
+        "id": _arr_team['id'],
+        "version": _arr_team['version'],
+        "name": _arr_team['name'],
+        "theme": _arr_team['theme'],
+        "defaultTeamRole": _arr_team['defaultTeamRole'],
+        "description": _arr_team['description'],
         "show": "host",
         "searchFilter": None,
-        "default": arr_team['default'],
-        "immutable": arr_team['immutable'],
-        "filter": f"kubernetes.namespace.name in ({str_new_filter})",
+        "default": _arr_team['default'],
+        "immutable": _arr_team['immutable'],
+        "filter": f"kubernetes.namespace.name in ({_str_new_filter})",
         "namespaceFilters": {
             "prometheusRemoteWrite": None
         },
-        "canUseRapidResponse": arr_team['canUseRapidResponse'],
-        "canUseSysdigCapture": arr_team['canUseSysdigCapture'],
-        "canUseAgentCli": arr_team['canUseAgentCli'],
-        "canUseCustomEvents": arr_team['canUseCustomEvents'],
-        "canUseAwsMetrics": arr_team['canUseAwsMetrics'],
-        "canUseBeaconMetrics": arr_team['canUseBeaconMetrics'],
+        "canUseRapidResponse": _arr_team['canUseRapidResponse'],
+        "canUseSysdigCapture": _arr_team['canUseSysdigCapture'],
+        "canUseAgentCli": _arr_team['canUseAgentCli'],
+        "canUseCustomEvents": _arr_team['canUseCustomEvents'],
+        "canUseAwsMetrics": _arr_team['canUseAwsMetrics'],
+        "canUseBeaconMetrics": _arr_team['canUseBeaconMetrics'],
         "products": [
             "SDS"
         ],
         "origin": "SYSDIG",
         "entryPoint": {
-            "module": arr_team['entryPoint']['module']
+            "module": _arr_team['entryPoint']['module']
         },
-        "zoneIds": str_zone_filter,
-        "allZones": not bool(str_zone_filter)
+        "zoneIds": _arr_team['zoneIds'],
+        "allZones": _arr_team['allZones']
     }
     return payload
+
+
+def build_payload_zone(_arr_zone, _str_zone_filter):
+    zone_payload = {
+        "name": _arr_zone['name'],
+        "description": _arr_zone['description'],
+        "scopes": [
+            {
+                "rules": f"namespace in ({_str_zone_filter})",
+                "targetType": "kubernetes"
+            }
+        ],
+        "policyIds": [policy['id'] for policy in _arr_zone['policies']]
+,
+        "id": _arr_zone['id']
+    }
+    return zone_payload
 
 
 def validate_choice(value):
@@ -125,8 +144,8 @@ def parse_command_line_arguments():
     group = objParser.add_mutually_exclusive_group(required=True)
 
     objParser.add_argument('--version', '-v',
-                       action='version',
-                       version='%(prog)s ' + __version__)
+                           action='version',
+                           version='%(prog)s ' + __version__)
     group.add_argument('--label', '-l',
                        required=False,
                        action='store_true',
@@ -296,16 +315,14 @@ if __name__ == "__main__":
             logging.error('We could not find a valid Kubernetes context.  Exiting... (sorry)')
             exit(1)
 
-    arr_zones = {}
     arr_namespaces = defaultdict(dict)
+    arr_zones = defaultdict(dict)
 
     for row in arr_team_config:
-        arr_zones[row[1]] = {}
-
         if arr_zone_config is not None:  # I.e we have zones to configure
             arr_found = list({int(sublist[2]) for sublist in arr_zone_config if sublist[1] == row[1]})
 
-            arr_zones[row[1]] = arr_found
+            arr_zones[row[1]] = arr_found[0] if arr_found else None
 
         if obj_args.annotation:
             arr_found = dict({k: v for k, v in arr_ns_annotations[row[2]].items() if v.startswith(row[3])})
@@ -329,15 +346,33 @@ if __name__ == "__main__":
         if len(arr_namespaces[row_teamid]) != 0:
             team_url = f"{obj_args.api_url}/api/teams/{row_teamid}"
             arr_team = (sysdig_request(method='GET', url=team_url, headers=auth_header)).json()
-            str_filter = ','.join(f'"{value}"' for value in arr_namespaces[row_teamid])
-            arr_zone_filter = list(arr_zones[row_teamid])
-            arr_payload = build_payload(arr_team=arr_team['team'], 
-                                        str_new_filter=str_filter,
-                                        str_zone_filter=arr_zone_filter)
-            obj_result = sysdig_request(method='PUT', url=team_url, headers=auth_header, _json=arr_payload)
-            logging.info(f"Updating Team: '{get_team_name(row_teamid,arr_team_config)}, "
+            str_namespace_filter = ','.join(f'"{value}"' for value in arr_namespaces[row_teamid])
+
+            arr_team_payload = build_payload(_arr_team=arr_team['team'],
+                                             _str_new_filter=str_namespace_filter)
+            obj_result = sysdig_request(method='PUT',
+                                        url=team_url,
+                                        headers=auth_header,
+                                        _json=arr_team_payload)
+            logging.info(f"Updating Team: '{get_team_name(row_teamid, arr_team_config)}, "
                          f"TeamID:'{row_teamid}.")
-            logging.debug(f" Payload {arr_payload}")
+            logging.debug(f" Payload {arr_team_payload}")
             logging.info(f"Update Result Code: {obj_result.status_code}")
+
+            # Process Zone
+            if arr_zones[row_teamid] is not None:
+                zone_url = f"{obj_args.api_url}/api/cspm/v1/policy/zones"
+                arr_zone = (sysdig_request(method='GET', url=f"{zone_url}/{arr_zones[row_teamid]}", headers=auth_header)).json()
+                arr_zone_payload = build_payload_zone(_arr_zone=arr_zone['data'],
+                                                      _str_zone_filter=str_namespace_filter)
+                obj_result = sysdig_request(method='POST',
+                                            url=zone_url,
+                                            headers=auth_header,
+                                            _json=arr_zone_payload)
+                logging.info(f"Updating Zone: '{arr_zone['data']['name']}, "
+                             f"ZoneId:'{arr_zone['data']['id']}.")
+                logging.debug(f" Payload {arr_zone_payload}")
+                logging.info(f"Update Result Code: {obj_result.status_code}")
+
         else:
             logging.info(f"No matching annotation/label. Skipping...")
